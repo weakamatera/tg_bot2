@@ -1,0 +1,371 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Star Shop</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #ffffff;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .stars-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            transform: translate(0, 0);
+            transition: transform 0.1s ease-out;
+        }
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: #ffffff;
+            box-shadow: 0 0 4px rgba(255, 255, 255, 0.6);
+            animation: moveStars 40s linear infinite;
+        }
+        @keyframes moveStars {
+            0% { transform: translateY(100vh); }
+            100% { transform: translateY(-100vh); }
+        }
+        .container {
+            flex: 1;
+            width: 90%;
+            max-width: 380px;
+            margin: 12px auto;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            overflow-y: auto;
+        }
+        .section {
+            display: none;
+        }
+        .section.active {
+            display: block;
+        }
+        .nav-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(26, 26, 46, 0.9);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .nav-bar button {
+            background: none;
+            border: none;
+            color: #ffffff;
+            font-size: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            padding: 8px;
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+        .nav-bar button.active {
+            color: #a78bfa;
+        }
+        .nav-bar button:active {
+            transform: scale(0.95);
+            box-shadow: 0 0 10px rgba(167, 139, 250, 0.5);
+        }
+        .nav-bar button svg {
+            width: 20px;
+            height: 20px;
+            margin-bottom: 4px;
+        }
+        .btn {
+            border-radius: 10px;
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+        .btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 0 10px rgba(167, 139, 250, 0.5);
+        }
+        input {
+            background: #2a2a4a;
+            border: none;
+            border-radius: 10px;
+            padding: 12px;
+            color: #ffffff;
+            font-size: 16px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        input:focus {
+            outline: none;
+            box-shadow: 0 0 8px rgba(167, 139, 250, 0.3);
+        }
+        label {
+            font-size: 14px;
+            margin-bottom: 6px;
+            display: block;
+        }
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+        p {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        #status, #error {
+            font-size: 14px;
+            text-align: center;
+            margin-top: 12px;
+        }
+        #error {
+            color: #ff6b6b;
+        }
+    </style>
+</head>
+<body>
+    <div class="stars-bg" id="starsBg"></div>
+    <div class="container">
+        <div id="buy" class="section active">
+            <h1>🌟 Купить звёзды</h1>
+            <div class="mb-4">
+                <label for="stars">Количество (≥50):</label>
+                <input type="number" id="stars" min="50" placeholder="Введите число">
+            </div>
+            <button id="submitStars" class="w-full bg-purple-600 text-white py-3 btn">Выбрать</button>
+
+            <div id="paymentSection" class="mt-4 hidden">
+                <p class="text-sm mb-2">Способ оплаты:</p>
+                <div class="grid grid-cols-2 gap-2">
+                    <button class="payment-btn bg-indigo-600 text-white py-2 btn" data-method="pay_yukassa">ЮKassa</button>
+                    <button class="payment-btn bg-indigo-600 text-white py-2 btn" data-method="pay_crypto">Крипто</button>
+                    <button class="payment-btn bg-indigo-600 text-white py-2 btn" data-method="pay_card">Карта РФ</button>
+                </div>
+                <button id="confirmPayment" class="w-full bg-green-600 text-white py-3 mt-4 btn hidden">Подтвердить оплату</button>
+            </div>
+            <p id="status" class="opacity-0"></p>
+            <p id="error"></p>
+        </div>
+
+        <div id="about" class="section">
+            <h1>О нас</h1>
+            <p>Star Shop — ваш надёжный помощник для покупки звёзд на Fragment. Быстро, безопасно, удобно!</p>
+        </div>
+
+        <div id="help" class="section">
+            <h1>Помощь</h1>
+            <p>
+                <strong>Как купить:</strong><br>
+                1. Введите ≥50 звёзд.<br>
+                2. Выберите оплату.<br>
+                3. Подтвердите.<br>
+                <strong>Проблемы?</strong> Пишите: @YourSupport.
+            </p>
+        </div>
+    </div>
+
+    <div class="nav-bar">
+        <button data-section="buy" class="active">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            Купить
+        </button>
+        <button data-section="about">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            О нас
+        </button>
+        <button data-section="help">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Помощь
+        </button>
+    </div>
+
+    <script>
+        console.log('Mini App: Starting initialization');
+        const tg = window.Telegram?.WebApp;
+        if (!tg) {
+            document.getElementById('error').innerText = 'Ошибка: Telegram WebApp не доступен';
+            console.error('Telegram.WebApp is not available');
+            return;
+        }
+
+        console.log('Mini App: Telegram.WebApp detected');
+        tg.ready();
+        console.log('Mini App: tg.ready() called');
+
+        // Навигация
+        const navButtons = document.querySelectorAll('.nav-bar button');
+        const sections = document.querySelectorAll('.section');
+        navButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log(`Nav: Switching to ${button.dataset.section}`);
+                navButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                sections.forEach(section => section.classList.remove('active'));
+                document.getElementById(button.dataset.section).classList.add('active');
+                document.getElementById('status').style.opacity = '0';
+            });
+        });
+
+        // Анимированные звёзды и параллакс
+        const starsBg = document.getElementById('starsBg');
+        for (let i = 0; i < 50; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.style.left = `${Math.random() * 100}vw`;
+            star.style.top = `${Math.random() * 100}vh`;
+            star.style.animation = `moveStars ${20 + Math.random() * 20}s linear infinite`;
+            starsBg.appendChild(star);
+        }
+
+        // Параллакс-эффект
+        const updateParallax = (x, y) => {
+            const maxMove = 10;
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            const moveX = ((x - centerX) / centerX) * maxMove;
+            const moveY = ((y - centerY) / centerY) * maxMove;
+            starsBg.style.transform = `translate(${-moveX}px, ${-moveY}px)`;
+        };
+
+        document.addEventListener('mousemove', (e) => {
+            updateParallax(e.clientX, e.clientY);
+        });
+
+        document.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 0) {
+                updateParallax(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        });
+
+        // Выбор звёзд
+        const submitStars = document.getElementById('submitStars');
+        submitStars.addEventListener('click', (e) => {
+            e.preventDefault();
+            const stars = document.getElementById('stars').value;
+            const status = document.getElementById('status');
+            console.log(`Submit stars: ${stars}`);
+            if (!stars || stars < 50) {
+                status.innerText = 'Введите число ≥ 50';
+                status.style.opacity = '1';
+                return;
+            }
+            try {
+                tg.sendData(JSON.stringify({
+                    action: 'set_stars',
+                    stars: stars
+                }));
+                status.innerText = 'Звёзды выбраны! Выберите оплату.';
+                status.style.opacity = '1';
+                document.getElementById('paymentSection').classList.remove('hidden');
+            } catch (err) {
+                console.error('Error sending stars:', err);
+                document.getElementById('error').innerText = 'Ошибка при отправке данных';
+            }
+        });
+
+        // Выбор оплаты
+        document.querySelectorAll('.payment-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.preventDefault();
+                const paymentMethod = button.dataset.method;
+                console.log(`Payment method selected: ${paymentMethod}`);
+                try {
+                    tg.sendData(JSON.stringify({
+                        action: 'select_payment',
+                        payment_method: paymentMethod
+                    }));
+                    document.getElementById('status').innerText = 'Счёт создан! Подтвердите.';
+                    document.getElementById('status').style.opacity = '1';
+                    document.getElementById('confirmPayment').classList.remove('hidden');
+                } catch (err) {
+                    console.error('Error sending payment method:', err);
+                    document.getElementById('error').innerText = 'Ошибка при выборе оплаты';
+                }
+            });
+        });
+
+        // Подтверждение оплаты
+        const confirmPayment = document.getElementById('confirmPayment');
+        confirmPayment.addEventListener('click', (e) => {
+            e.preventDefault();
+            console.log('Confirm payment clicked');
+            try {
+                tg.sendData(JSON.stringify({
+                    action: 'confirm_payment'
+                }));
+                document.getElementById('status').innerText = 'Оплата подтверждена! Проверьте чат.';
+                document.getElementById('status').style.opacity = '1';
+            } catch (err) {
+                console.error('Error confirming payment:', err);
+                document.getElementById('error').innerText = 'Ошибка при подтверждении оплаты';
+            }
+        });
+
+        // Закрытие Web App
+        tg.onEvent('mainButtonClicked', () => {
+            console.log('Main button clicked, closing Web App');
+            tg.close();
+        });
+    </script>
+</body>
+</html>
